@@ -1,0 +1,552 @@
+#include "stdafx.h"
+#include <iostream>
+#include <conio.h>
+
+
+using namespace std;
+
+#define MAX 3
+#define MIN 1
+
+struct btreeNode 
+{
+	int val[MAX + 1], count;
+	btreeNode *link[MAX + 1];
+};
+
+
+class BTree
+{
+	private:
+		btreeNode *root;
+		btreeNode * createNode(int val, btreeNode *parent);
+		void addValToNode(int val, int pos, btreeNode *node, btreeNode *child);
+		void splitNode(int val, int *pval, int pos, btreeNode *node, btreeNode *child, btreeNode **newNode);
+		int setValueInNode(int val, int *pval, btreeNode *node, btreeNode **child);
+		void searching(int val, int pos, btreeNode *myNode);
+		void traversal(btreeNode *myNode);
+		void deletenode(btreeNode *node);
+		void deletion(int val, btreeNode *myNode);
+		void copySuccessor(btreeNode *myNode, int pos);
+		void removeVal(btreeNode *myNode, int pos);
+		void doRightShift(btreeNode *myNode, int pos);
+		void doLeftShift(btreeNode *myNode, int pos);
+		void mergeNodes(btreeNode *myNode, int pos);
+		void adjustNode(btreeNode *myNode, int pos);
+		int delValFromNode(int val, btreeNode *myNode);
+
+
+	public:
+		BTree();
+		~BTree();
+		void insertion(int val);
+		void search(int val);
+		void print();
+		void deleteKey(int val);
+		
+
+};
+
+BTree::BTree()
+{
+	btreeNode *root = new btreeNode;	
+}
+
+BTree::~BTree()
+{
+	if (root != nullptr) deletenode(root);
+}
+
+//создаем новый узел
+btreeNode* BTree::createNode(int val, btreeNode *parent) 
+{
+	btreeNode *newNode = new btreeNode;
+	newNode->val[1] = val;
+	newNode->count = 1;
+	newNode->link[0] = root;
+	newNode->link[1] = parent;
+	return newNode;
+}
+
+//функция деструктора
+void BTree::deletenode(btreeNode *node)
+{
+	delete(root);
+}
+
+
+
+
+//***
+//Add
+//***
+//добавляем ключ в узел в соответствии с позицией
+void BTree::addValToNode(int val, int pos, btreeNode *node, btreeNode *child)
+{
+	int j = node->count;
+
+	//делаем сдвиг, если значение ключа находится не на концах отрезка
+	while (j > pos) 
+	{
+		node->val[j + 1] = node->val[j];
+		node->link[j + 1] = node->link[j];
+		j--;
+	}
+	//добавляем значение ключа
+	node->val[j + 1] = val;
+	node->link[j + 1] = child;
+	node->count++;
+}
+
+//разбиваем узел
+void BTree::splitNode(int val, int *pval, int pos, btreeNode *node, btreeNode *child, btreeNode **newNode)
+{
+	int median, j;
+
+	if (pos > MIN)
+		median = MIN + 1;
+	else
+		median = MIN;
+
+	//создаем новый узел, переносим в него значения правее медианы
+	*newNode = new btreeNode;
+	j = median + 1;
+	while (j <= MAX) 
+	{
+		(*newNode)->val[j - median] = node->val[j];
+		(*newNode)->link[j - median] = node->link[j];
+		j++;
+	}
+	node->count = median;
+	(*newNode)->count = MAX - median;
+
+	//вставляем новый ключ в нужного потомка
+	if (pos <= MIN) 
+	{
+		addValToNode(val, pos, node, child);
+	}
+	else 
+	{
+		addValToNode(val, pos - median, *newNode, child);
+	}
+	//запоминаем среднее значение, для передачи его в корень
+	*pval = node->val[node->count];
+
+	//прописываем потомку адрес родителя
+	(*newNode)->link[0] = node->link[node->count];
+
+	node->count--;
+}
+
+//ищем позицию и узел для добавления ключа
+int BTree::setValueInNode(int val, int *pval, btreeNode *node, btreeNode **child)
+{
+
+	int pos;
+	if (!node) 
+	{
+		*pval = val;
+		*child = NULL;
+		return 1;
+	}
+
+	//ищем позицию  в узле для добавления ключа
+	if (val < node->val[1]) 
+	{
+		pos = 0;
+	}
+	else 
+	{
+		for (pos = node->count; (val < node->val[pos] && pos > 1); pos--);
+
+		if (val == node->val[pos]) 
+		{
+			cout << "Duplicates not allowed\n";
+			return 0;
+		}
+	}
+	//ищем узел для добавления ключа
+	if (setValueInNode(val, pval, node->link[pos], child)) 
+	{
+		//если узел неполон, то добавляем ключ, в противном случае разбиваем его
+		if (node->count < MAX)
+		{
+			addValToNode(*pval, pos, node, *child);
+		}
+		else 
+		{
+			splitNode(*pval, pval, pos, node, *child, child);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+//добавление ключа в B-Tree
+void BTree::insertion(int val)
+{
+	int flag, i;
+	btreeNode *child;
+
+	flag = setValueInNode(val, &i, root, &child);
+
+	//создаем новый корень при увеличении высоты дерева
+	if (flag)
+		root = createNode(i, child);
+}
+
+
+
+//***
+//Delete
+//***
+//основная функция поиска и удаления ключа в дереве
+void BTree::deletion(int val, btreeNode *myNode)
+{
+	btreeNode *tmp;
+
+	//поиск ключа в дереве
+	if (!delValFromNode(val, myNode))
+	{
+		cout << "Given value is not present in B-Tree\n";
+		return;
+	}
+	else
+	{
+		//если в родительском узле больше не осталось ключей, то удаляем его
+		if (myNode->count == 0)
+		{
+			tmp = myNode;
+			myNode = myNode->link[0];
+			free(tmp);
+		}
+	}
+
+	root = myNode;
+	return;
+}
+
+//поиск соответствующего узла для удаления ключа
+int BTree::delValFromNode(int val, btreeNode *myNode) 
+{
+	int pos, flag = 0;
+
+	if (myNode) 
+	{
+		if (val < myNode->val[1]) 
+		{
+			pos = 0;
+			flag = 0;
+		}
+		else 
+		{
+			//ищем позицию  в узле для удаления ключа
+			for (pos = myNode->count; (val < myNode->val[pos] && pos > 1); pos--);
+
+			if (val == myNode->val[pos]) 
+			{
+				flag = 1; //нашли ключ в узле
+			}
+			else 
+			{
+				flag = 0; //не нашли ключ в узле
+			}
+		}
+
+		//если нашли ключ, то удаляем его
+		if (flag) 
+		{
+			//если ключ в промежуточном узле, то удаляем ключ
+			//затем восстанавливаем Би-древовидность путем переноса ключ от ребенка к родителю
+			if (myNode->link[pos - 1]) 
+			{
+				copySuccessor(myNode, pos);
+				flag = delValFromNode(myNode->val[pos], myNode->link[pos]);
+
+				if (flag == 0) 
+				{
+					cout << "Given data is not present in B-Tree\n";
+				}
+			}
+			else 
+			{
+				//если ключ в листе
+				removeVal(myNode, pos);
+			}
+		}
+		else 
+		{
+			flag = delValFromNode(val, myNode->link[pos]);
+		}
+
+		//если после удаления ключа узел оказался пуст, то перестраиваем дерево
+		if (myNode->link[pos]) 
+		{
+			if (myNode->link[pos]->count < MIN)
+			{
+				adjustNode(myNode, pos);
+			}
+				
+		}
+	}
+
+	return flag;
+}
+
+//удаление ключа из узла
+void BTree::removeVal(btreeNode *myNode, int pos) 
+{
+	int i = pos + 1;
+
+	//сдвигаем все значения правее удаляемого ключа влево
+	while (i <= myNode->count) 
+	{
+		myNode->val[i - 1] = myNode->val[i];
+		myNode->link[i - 1] = myNode->link[i];
+		i++;
+	}
+	myNode->count--;
+}
+
+//восстановление древовидности
+void BTree::adjustNode(btreeNode *myNode, int pos) 
+{
+	//если получился пустой узел слева, то перемещаем левый ключ из родителя в пустой узел
+	//если у родителя t-1 ключей, то объединяем родителя и пустого левого ребенка
+	if (!pos) 
+	{
+		if (myNode->link[1]->count > MIN)
+		{
+			doLeftShift(myNode, 1);
+		}
+		else 
+		{
+			mergeNodes(myNode, 1);
+		}
+	}
+	else 
+	{
+		//если искомый узел получился внутри родительского узла
+		if (myNode->count != pos)
+		{
+			//если соседний ребенок слева имеет больше t-1 ключей, то переносим туда ключ из корня 
+			if (myNode->link[pos - 1]->count > MIN) 
+			{
+				doRightShift(myNode, pos);
+			}
+			else 
+			{
+				//если соседний ребенок справа имеет больше t-1 ключей, то переносим туда ключ из корня 
+				if (myNode->link[pos + 1]->count > MIN) 
+				{
+					doLeftShift(myNode, pos + 1);
+				}
+				else 
+				{
+					//если во всех соседних узлах t-1 ключей, то просто соединяем их
+					mergeNodes(myNode, pos);
+				}
+			}
+		}
+
+		//если получился пустой узел справа, то перемещаем правый ключ из родителя в пустой узел
+		//если у родителя t-1 ключей, то объединяем родителя и пустого правого ребенка
+		else 
+		{
+			if (myNode->link[pos - 1]->count > MIN)
+				doRightShift(myNode, pos);
+			else
+				mergeNodes(myNode, pos);
+		}
+	}
+}
+
+//перенос ключа от родителя в правого ребенка
+void BTree::doRightShift(btreeNode *myNode, int pos) 
+{
+	btreeNode *x = myNode->link[pos];
+	int j = x->count;
+
+	while (j > 0) 
+	{
+		x->val[j + 1] = x->val[j];
+		x->link[j + 1] = x->link[j];
+	}
+
+	x->val[1] = myNode->val[pos];
+	x->link[1] = x->link[0];
+	x->count++;
+
+	x = myNode->link[pos - 1];
+	myNode->val[pos] = x->val[x->count];
+	myNode->link[pos] = x->link[x->count];
+	x->count--;
+	return;
+}
+
+//перенос ключа от родителя в левого ребенка
+void BTree::doLeftShift(btreeNode *myNode, int pos) 
+{
+	int j = 1;
+	btreeNode *x = myNode->link[pos - 1];
+
+	x->count++;
+	x->val[x->count] = myNode->val[pos];
+	x->link[x->count] = myNode->link[pos]->link[0];
+
+	x = myNode->link[pos];
+	myNode->val[pos] = x->val[1];
+	x->link[0] = x->link[1];
+	x->count--;
+
+	while (j <= x->count) 
+	{
+		x->val[j] = x->val[j + 1];
+		x->link[j] = x->link[j + 1];
+		j++;
+	}
+
+	return;
+}
+
+//объединение узлов, если после удаления ключа в них осталось t-1 ключ
+void BTree::mergeNodes(btreeNode *myNode, int pos) {
+	int j = 1;
+	btreeNode *x1 = myNode->link[pos], *x2 = myNode->link[pos - 1];
+
+	x2->count++;
+	x2->val[x2->count] = myNode->val[pos];
+	x2->link[x2->count] = myNode->link[0];
+
+	while (j <= x1->count) {
+		x2->count++;
+		x2->val[x2->count] = x1->val[j];
+		x2->link[x2->count] = x1->link[j];
+		j++;
+	}
+
+	j = pos;
+	while (j < myNode->count) {
+		myNode->val[j] = myNode->val[j + 1];
+		myNode->link[j] = myNode->link[j + 1];
+		j++;
+	}
+	myNode->count--;
+	free(x1);
+}
+
+//перенос ключа из ребенка в родителя
+void BTree::copySuccessor(btreeNode *myNode, int pos)
+{
+	btreeNode *dummy;
+	dummy = myNode->link[pos];
+
+	for (; dummy->link[0] != NULL;)
+		dummy = dummy->link[0];
+
+	myNode->val[pos] = dummy->val[1];
+
+}
+
+//удаление ключа из BTree
+void BTree::deleteKey(int val)
+{
+	deletion(val, root);
+}
+
+
+
+
+
+
+//***
+//Search
+//***
+//поиск ключа в дереве
+void BTree::searching(int val, int pos, btreeNode *myNode) 
+{
+	if (!myNode) 
+	{
+		return;
+	}
+
+	//ищем ветвь, в которой лежит ключ
+	if (val < myNode->val[1]) 
+	{
+	pos = 0;
+	}
+	else 
+	{
+		for (pos = myNode->count; (val < myNode->val[pos] && pos > 1); (pos)--);
+
+		if (val == myNode->val[pos]) 
+		{
+			cout << "Given data is Found\n";
+			return;
+		}
+	}
+	//переходим в следующую ветвь
+	searching(val, pos, myNode->link[pos]);
+
+	return;
+}
+
+//поиск ключа в BTree
+void BTree::search(int val)
+{
+	searching(val, 1, root);
+}
+
+
+
+
+//***
+//Print
+//***
+//последовательно идем по каждой ветви
+void BTree::traversal(btreeNode *myNode) 
+{
+	int i;
+	if (myNode) 
+	{		
+		for (i = 0; i < myNode->count; i++)
+		{
+			traversal(myNode->link[i]);			
+			cout << myNode->val[i + 1] << ' ';
+		}
+
+		cout << "\n";		
+		traversal(myNode->link[i]);		
+	}
+}
+
+//вывод BTree в консоль
+void BTree::print()
+{
+	traversal(root);
+}
+
+
+int main()
+{
+	BTree tree;
+
+	tree.insertion(50);
+	tree.insertion(20);
+	tree.insertion(30);
+	tree.insertion(70);
+	tree.insertion(40);
+	tree.insertion(10);
+	//tree.insertion(35);
+	tree.print();
+	cout << "\n" << endl;
+
+	/*tree.search(30);
+	cout << "\n" << endl;*/
+
+	tree.deleteKey(30);
+	cout << "\n" << endl;
+	tree.print();
+
+	system("pause");
+}
