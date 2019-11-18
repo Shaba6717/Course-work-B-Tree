@@ -1,0 +1,659 @@
+#include "stdafx.h"
+#include <conio.h>
+#include <iostream>
+#include <vector>
+
+#define MAX 3
+
+using namespace std;
+
+struct BTreeNode
+{
+	int arrayKey[MAX];
+	int countKey;
+	int level;
+	BTreeNode *children[MAX + 1];
+	bool leaf;
+};
+
+
+class BTree
+{
+private:
+	BTreeNode *root_ = new BTreeNode;
+	int h_ = 1, l = 0;
+	int posChild_ = 0;
+	bool res = false;
+	BTreeNode** path_;
+	BTreeNode* createNode(int key);
+	void setKeyToNode(int key, BTreeNode* node);
+	BTreeNode* addKeyToNode(int key, BTreeNode* node);
+	void sortNode(BTreeNode* node);
+	void splitNode(int key, BTreeNode* node, bool direction = true, BTreeNode* childLeft = nullptr, BTreeNode* childRight = nullptr);
+	void printTreeToConsole(BTreeNode* node);
+	void setKeyToParent(const int key, BTreeNode* nodeParent, BTreeNode* childLeft, BTreeNode* childRight);
+	BTreeNode* createPath(BTreeNode* path, const int height);
+	void resLevel(BTreeNode* node);
+	BTreeNode* searching(int key, BTreeNode* node);
+	bool delKeyFromTree(int key, BTreeNode* node);
+	void delKeyFromNode(int key, BTreeNode* node);
+	void delEmptyNode(BTreeNode* node);
+
+	
+
+public:
+	BTree();
+	~BTree();
+	void insertKey(int key);
+	void searchKey(int key);
+	void deleteKey(int key);
+	void printTree();
+
+	
+
+};
+
+BTree::BTree()
+{
+	root_->countKey = 0;
+	root_->leaf = true;
+	root_->level = 0;
+	for (int j = 0; j < MAX; j++) root_->arrayKey[j] = 0;
+	for (int i = 0; i < MAX + 1; i++) root_->children[i] = nullptr;
+
+}
+
+BTree::~BTree()
+{
+	delete(root_);
+}
+
+BTreeNode* BTree::createPath(BTreeNode* path, const int height)
+{
+	path = new BTreeNode[height];
+	return path;
+}
+//функция создает новый узел и добавляет в него указанный ключ
+//int key - новый ключ, указанный пользователем
+BTreeNode* BTree::createNode(int key)
+{
+	BTreeNode *newNode = new BTreeNode;
+	newNode->arrayKey[0] = key;
+	for (int j = 1; j < MAX; j++) newNode->arrayKey[j] = 0;
+	for (int i = 0; i < MAX + 1; i++) newNode->children[i] = nullptr;
+	newNode->countKey = 1;
+	return newNode;
+}
+
+
+//***
+//Добавление ключа
+//***
+
+//интерфейс пользователя для добавления нового ключа в дерево
+void BTree::insertKey(int key)
+{
+	path_ = new BTreeNode*[h_];
+	setKeyToNode(key, this->root_);
+	
+	l = 0;
+	delete path_;
+
+	if (res)
+	{
+		res = false;
+		resLevel(root_);
+	}
+		
+}
+
+void BTree::setKeyToNode(const int key, BTreeNode* node)
+{
+	int pos;
+
+	path_[l] = node;
+	l++;
+
+	if (!node)
+	{
+		node = createNode(key);
+		return;
+	}
+
+	if (node->leaf)
+	{
+		if (node->countKey < MAX)
+			node = addKeyToNode(key, node);
+		else
+			splitNode(key, node);
+	}
+	else
+	{
+		for (pos = 0; key > node->arrayKey[pos] && pos < node->countKey; pos++);
+
+		if (key == node->arrayKey[pos - 1])
+		{
+			std::cout << "\nDuplicate" << endl;
+			return;
+		}
+
+		
+		setKeyToNode(key, node->children[pos]);
+		
+	}
+
+	
+}
+
+BTreeNode* BTree::addKeyToNode(const int key, BTreeNode* node)
+{
+	node->arrayKey[node->countKey] = key;
+	node->countKey++;
+	sortNode(node);
+	return node;
+	
+}
+
+void BTree::splitNode(int key, BTreeNode* node, bool direction, BTreeNode* childLeft, BTreeNode* childRight)
+{
+	int medianKey, medianPos;
+
+	if (key < node->arrayKey[0])
+	{
+		medianPos = 0;
+		medianKey = node->arrayKey[0];
+	}
+	else
+	{
+		medianPos = 1;
+		medianKey = node->arrayKey[1];
+	}
+
+	//если делимый узел оказался корнем
+	if (node == root_)
+	{
+		h_++;
+		res = true;
+		//создаем правого потомка
+		BTreeNode *newNode = new BTreeNode;
+		newNode->level = node->level + 1;
+		newNode->countKey = 0;
+		for (int i = 0; i < MAX; i++) newNode->arrayKey[i] = 0;
+		for (int i = medianPos + 1; i < MAX; i++)
+		{
+			newNode->arrayKey[i - medianPos - 1] = node->arrayKey[i];
+			newNode->countKey++;
+		}
+		for (int j = 0; j <= MAX; j++) newNode->children[j] = nullptr;
+		
+		if (direction)
+			newNode->leaf = true;
+		else
+		{
+			newNode->leaf = false;
+			for (int j = 0; j < MAX; j++) newNode->children[j] = node->children[medianPos + j + 1];
+		}
+			
+
+		//создаем новый корень
+		BTreeNode *newRoot = new BTreeNode;
+		newRoot->leaf = false;
+		newRoot->level = 0;
+		newRoot->arrayKey[0] = medianKey;
+		newRoot->countKey = 1;
+		for (int i = 1; i < MAX; i++) newRoot->arrayKey[i] = 0;
+		newRoot->children[0] = node;
+		newRoot->children[1] = newNode;
+		for (int j = 2; j <= MAX; j++) newRoot->children[j] = nullptr;
+
+
+		node->level++;
+		node->countKey = medianPos;
+		for (int i = MAX - 1; i >= medianPos; i--) node->arrayKey[i] = 0;
+		
+
+		if (direction)
+		{
+			for (int j = 0; j <= MAX; j++) node->children[j] = nullptr;
+			node->leaf = true;
+		}			
+		else
+		{
+			for (int j = MAX + 1; j > medianPos; j--) node->children[j] = nullptr;
+			node->leaf = false;
+		}
+			
+
+		root_ = newRoot;
+
+		if (key < medianKey)
+		{
+			addKeyToNode(key, root_->children[0]);
+			if (!direction)
+				if (root_->children[0]->countKey == 1)
+				{
+					root_->children[0]->children[0] = childLeft;
+					root_->children[0]->children[1] = childRight;
+				}
+				else
+				{
+					int posChild;
+					for (posChild = 0; key > root_->children[0]->arrayKey[posChild] && posChild < root_->children[0]->countKey; posChild++);
+					root_->children[0]->children[posChild] = childLeft;
+					root_->children[0]->children[posChild + 1] = childRight;
+				}
+		}
+			
+		else
+		{
+			addKeyToNode(key, root_->children[1]);
+			if (!direction)
+				if (root_->children[1]->countKey == 1)
+				{
+					root_->children[1]->children[0] = childLeft;
+					root_->children[1]->children[1] = childRight;
+				}
+				else
+				{
+					int posChild;
+					for (posChild = 0; key > root_->children[1]->arrayKey[posChild] && posChild < root_->children[1]->countKey; posChild++);
+					root_->children[1]->children[posChild] = childLeft;
+					root_->children[1]->children[posChild + 1] = childRight;
+				}
+		}
+
+		return;
+	}
+
+	//создаем правого потомка
+	BTreeNode *newNode = new BTreeNode;
+	newNode->level = node->level;
+	newNode->countKey = 0;	
+	for (int i = 0; i < MAX; i++) newNode->arrayKey[i] = 0;
+	for (int i = medianPos + 1; i < MAX; i++)
+	{
+		newNode->arrayKey[i - medianPos - 1] = node->arrayKey[i];
+		newNode->countKey++;
+	}
+	for (int j = 0; j <= MAX; j++) newNode->children[j] = nullptr;
+
+	if (direction)
+	{
+		newNode->leaf = true;
+	}		
+	else
+	{
+		newNode->leaf = false;			
+		for (int j = 0; j < MAX; j++) newNode->children[j] = node->children[medianPos + j + 1];
+	}
+		
+
+	//создаем левого потомка
+	node->countKey = medianPos;
+	for (int i = MAX - 1; i >= medianPos; i--) node->arrayKey[i] = 0;
+	for (int j = MAX+1; j > medianPos; j--) node->children[j] = nullptr;
+
+	if (direction)	
+		node->leaf = true;		
+	else
+		node->leaf = false;
+		
+
+	//добавляем ключ в нужного потомка
+	//если делили промежуточный узел, то добавляем потомков к новообразованным узлам
+	if (key > medianKey)
+	{
+		newNode = addKeyToNode(key, newNode);
+		if (!direction)
+			if (newNode->countKey == 1)
+			{
+				newNode->children[0] = childLeft;
+				newNode->children[1] = childRight;
+			}
+			else
+			{
+				int posChild;
+				for (posChild = 0; key > newNode->arrayKey[posChild] && posChild < newNode->countKey; posChild++);
+				newNode->children[posChild] = childLeft;
+				newNode->children[posChild + 1] = childRight;
+			}
+	}		
+	else
+	{
+		node = addKeyToNode(key, node);
+		if (!direction)
+			if (node->countKey == 1)
+			{
+				node->children[0] = childLeft;
+				node->children[1] = childRight;
+			}
+			else
+			{
+				int posChild;
+				for (posChild = 0; key > node->arrayKey[posChild] && posChild < node->countKey; posChild++);
+				node->children[posChild] = childLeft;
+				node->children[posChild + 1] = childRight;
+			}
+	}
+		
+
+	l-=2;
+	setKeyToParent(medianKey, path_[l], node, newNode);
+
+
+}
+
+void BTree::setKeyToParent(const int key, BTreeNode* nodeParent, BTreeNode* childLeft, BTreeNode* childRight)
+{
+	int pos;	
+
+	if (nodeParent->countKey < MAX)
+	{
+		//добавление ключа слева
+		if (key < nodeParent->arrayKey[0])
+		{
+			pos = 0;
+			for (int i = nodeParent->countKey; i > 0; i--) nodeParent->arrayKey[i] = nodeParent->arrayKey[i - 1];
+			for (int j = nodeParent->countKey + 1; j >= 0; j--) nodeParent->children[j] = nodeParent->children[j - 1];
+			nodeParent->children[pos] = childLeft;
+			nodeParent->children[pos + 1] = childRight;
+			nodeParent->arrayKey[pos] = key;
+			nodeParent->countKey++;
+			return;
+		}
+
+		//поиск позиции для добавления ключа
+		for (pos = 0; key > nodeParent->arrayKey[pos] && pos < nodeParent->countKey; pos++);
+		
+		//добавление ключа справа
+		if (pos == nodeParent->countKey)
+		{
+			nodeParent->children[pos] = childLeft;
+			nodeParent->children[pos + 1] = childRight;
+			nodeParent = addKeyToNode(key, nodeParent);
+			return;
+		}
+
+		//добавление ключа внутри
+		for (int i = nodeParent->countKey; i > pos; i--) nodeParent->arrayKey[i] = nodeParent->arrayKey[i - 1];
+		for (int j = nodeParent->countKey + 1; j >= pos; j--) nodeParent->children[j] = nodeParent->children[j - 1];
+		nodeParent->children[pos] = childLeft;
+		nodeParent->children[pos + 1] = childRight;
+		addKeyToNode(key, nodeParent);
+		return;
+	}		
+	else
+	{
+		splitNode(key, nodeParent, false, childLeft, childRight);
+	}
+		
+}
+
+
+
+//***
+//Поиск
+//***
+
+void BTree::searchKey(int key)
+{
+	BTreeNode* resultNode = new BTreeNode;
+	path_ = new BTreeNode*[h_];
+	resultNode = searching(key, root_);	
+
+	l = 0;
+	delete path_, resultNode;
+
+	if (resultNode)
+		cout << "\nKey found" << endl;
+	else
+		cout << "\nKey not found" << endl;
+}
+
+BTreeNode* BTree::searching(int key, BTreeNode* node)
+{
+	if (node)
+	{
+		path_[l] = node;
+		l++;
+
+		if (key == node->arrayKey[0])
+			return node;
+		else
+			if (key < node->arrayKey[0])
+			{
+				posChild_ = 0;
+				searching(key, node->children[0]);
+			}				
+			else
+			{
+				int pos;
+				for (pos = 0; key > node->arrayKey[pos] && pos < node->countKey; pos++);				
+
+				if (key == node->arrayKey[pos])				
+					return node;
+									
+
+				posChild_ = pos;
+				searching(key, node->children[pos]);
+			}		
+	}
+	else
+		return nullptr;
+	
+}
+
+//***
+//Удаление ключа
+//***
+
+void BTree::deleteKey(int key)
+{
+	if (delKeyFromTree(key, root_))
+		cout << "\nKey removed" << endl;
+	else
+		cout << "\nKey not found" << endl;
+}
+
+bool BTree::delKeyFromTree(int key, BTreeNode* node)
+{
+	path_ = new BTreeNode*[h_];
+	BTreeNode* tempNode = searching(key, node);
+	int posChild = posChild_;
+	BTreeNode* parentNode = path_[l - 2];
+
+	if (tempNode)
+	{
+		delKeyFromNode(key, tempNode);
+		
+		if(tempNode->countKey == 0)
+			if (tempNode->leaf)
+			{
+				if (posChild == 0)
+					if (parentNode->children[posChild + 1]->countKey > 1)
+					{
+						addKeyToNode(parentNode->arrayKey[posChild], tempNode);
+						parentNode->arrayKey[posChild] = parentNode->children[posChild + 1]->arrayKey[0];
+						delKeyFromNode(parentNode->children[posChild + 1]->arrayKey[0], parentNode->children[posChild + 1]);
+					}
+					else
+						if (parentNode->countKey > 1)
+						{
+							free(tempNode);
+							addKeyToNode(parentNode->arrayKey[posChild], parentNode->children[posChild + 1]);
+							parentNode->arrayKey[posChild] = 0;
+							sortNode(parentNode);
+							for (int i = posChild; i < parentNode->countKey; i++) parentNode->children[i] = parentNode->children[i + 1];
+							parentNode->countKey--;
+						}
+						else
+						{
+							free(tempNode);
+							addKeyToNode(parentNode->children[posChild + 1]->arrayKey[0], parentNode);
+							parentNode->leaf = true;
+							free(parentNode->children[posChild + 1]);
+							for (int i = 0; i < parentNode->countKey + 1; i++) parentNode->children[i] = nullptr;
+						}
+				else
+				{
+					if (parentNode->children[posChild - 1]->countKey > 1)
+					{
+						addKeyToNode(parentNode->arrayKey[posChild - 1], tempNode);
+						parentNode->arrayKey[posChild] = parentNode->children[posChild - 1]->arrayKey[parentNode->children[posChild - 1]->countKey - 1];
+						delKeyFromNode(parentNode->children[posChild - 1]->arrayKey[parentNode->children[posChild - 1]->countKey], parentNode->children[posChild - 1]);
+					}
+					else
+						if (parentNode->countKey > 1)
+						{
+							free(tempNode);
+							addKeyToNode(parentNode->arrayKey[posChild - 1], parentNode->children[posChild - 1]);
+							parentNode->arrayKey[posChild - 1] = 0;
+							sortNode(parentNode);
+							for (int i = posChild; i < parentNode->countKey; i++) parentNode->children[i] = parentNode->children[i + 1];
+							parentNode->countKey--;
+						}
+						else
+						{
+							free(tempNode);
+							addKeyToNode(parentNode->children[posChild - 1]->arrayKey[0], parentNode);
+							parentNode->leaf = true;
+							free(parentNode->children[posChild - 1]);
+							for (int i = 0; i < parentNode->countKey + 1; i++) parentNode->children[i] = nullptr;							
+						}
+				}
+			}
+			else
+				if (tempNode == root_)
+				{
+					cout << "\nDelete root" << endl;
+				}
+				else
+				{
+
+				}
+		
+		delete path_, parentNode;
+		l = 0;
+		return true;
+	}
+	else
+	{
+		delete path_, parentNode;
+		l = 0;
+		return false;
+	}			
+}
+
+void BTree::delKeyFromNode(int key, BTreeNode* node)
+{
+	if (node->leaf)
+	{
+		int pos;
+		for (pos = 0; key != node->arrayKey[pos] && pos <= node->countKey; pos++);
+		node->arrayKey[pos] = 0;
+		sortNode(node);
+		node->countKey--;
+		
+	}
+	
+}
+
+void BTree::delEmptyNode(BTreeNode* node)
+{
+	cout << "\nIn progress" << endl;
+}
+
+//***
+//Вывод дерева в консоль
+//***
+void BTree::printTree()
+{
+	printTreeToConsole(root_);
+}
+
+void BTree::printTreeToConsole(BTreeNode* node)
+{
+	if (node)
+	{
+		for (int i = 0; i <= node->countKey; i++)
+		{
+			printTreeToConsole(node->children[i]);
+			if (i == node->countKey)
+				cout << "\n";
+			else
+				cout << "level = " << node->level << "\tkey = " << node->arrayKey[i] << endl;
+
+			if (node == root_) cout << "\n";
+		}
+	}	
+}
+
+
+//***
+//Вспомогательные функции
+//***
+//сортировка ключей в ноде
+// node - сортируемый узел
+void BTree::sortNode(BTreeNode* node)
+{
+	for (int i = 0; i < node->countKey - 1; i++)
+	{
+		for (int j = 0; j < node->countKey - 1; j++)
+		{
+			if ((node->arrayKey[j] > node->arrayKey[j + 1] && node->arrayKey[j + 1] != 0) || node->arrayKey[j] == 0)
+			{
+				int temp = node->arrayKey[j];
+				node->arrayKey[j] = node->arrayKey[j + 1];
+				node->arrayKey[j + 1] = temp;
+			}
+		}
+		
+	}
+}
+
+//восстановление значений уровней узлов в дереве после увеличения высоты дерева
+// node - узел, с которого начинаем восстановление
+void BTree::resLevel(BTreeNode* node)
+{
+	if (node)
+	{		
+		for (int i = 0; i <= node->countKey; i++)
+		{
+			node->level = l;
+			l++;
+			resLevel(node->children[i]);
+			l--;						
+		}
+	}
+}
+
+int main()
+{
+	BTree tree;
+
+	tree.insertKey(30);
+	tree.insertKey(50);
+	tree.insertKey(40);
+	tree.insertKey(60);
+	tree.insertKey(10);
+	tree.insertKey(70);
+	tree.insertKey(80);
+	tree.insertKey(20);
+	tree.insertKey(15);
+	tree.insertKey(90);
+	tree.insertKey(100);
+	tree.printTree();
+
+	/*tree.searchKey(50);
+	tree.searchKey(200);*/
+
+	tree.deleteKey(15);
+	tree.deleteKey(30);
+	tree.deleteKey(100);
+	tree.deleteKey(70);
+	tree.printTree();
+
+	
+	system("pause");
+	return 0;
+}
